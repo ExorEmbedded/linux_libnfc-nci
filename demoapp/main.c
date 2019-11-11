@@ -74,13 +74,10 @@ static void* g_ThreadHandle = NULL;
 static void* g_devLock = NULL;
 static void* g_SnepClientLock = NULL;
 static void* g_HCELock = NULL;
-static eOutputFormat g_OutputFormat = eOutputFormat_TXT;
-FILE *g_OutputFile = NULL;
 static eDevState g_DevState = eDevState_NONE;
 static eDevType g_Dev_Type = eDevType_NONE;
 static eSnepClientState g_SnepClientState = eSnepClientState_OFF;
 static eHCEState g_HCEState = eHCEState_NONE;
-int g_msgCounter = 0;
 static nfc_tag_info_t g_TagInfo;
 static nfcTagCallback_t g_TagCB;
 static nfcHostCardEmulationCallback_t g_HceCB;
@@ -104,6 +101,42 @@ static T4T_NDEF_EMU_Callback_t *pT4T_NDEF_EMU_PushCb = NULL;
 void help(int mode);
 int InitEnv();
 int LookForTag(char** args, int args_len, char* tag, char** data, int format);
+
+//
+// <extensions>
+//
+#ifndef CLOCK_TICK_RATE
+#define CLOCK_TICK_RATE 1193180
+#endif
+
+#include <fcntl.h>
+#include <linux/input.h>
+static eOutputFormat g_OutputFormat = eOutputFormat_TXT;
+FILE *g_OutputFile = NULL;
+int g_msgCounter = 0;
+int g_doBeep = 0;
+
+static void do_beep(int freq) {
+    int period = (freq != 0 ? (int)(CLOCK_TICK_RATE/freq) : freq);
+    int console_fd = open("/dev/tty0", O_WRONLY);
+
+    struct input_event e;
+    e.type = EV_SND;
+    e.code = SND_TONE;
+    e.value = freq;
+
+    if(write(console_fd, &e, sizeof(struct input_event)) < 0)
+    {
+        putchar('\a'); /* See above */
+        perror("write");
+    }
+
+    close(console_fd);
+}
+//
+// </extensions>
+//
+
 /********************************** HCE **********************************/
 static void T4T_NDEF_EMU_FillRsp (unsigned char *pRsp, unsigned short offset, unsigned char length)
 {
@@ -302,6 +335,10 @@ void onTagArrival(nfc_tag_info_t *pTagInfo)
     if(eDevState_WAIT_ARRIVAL == g_DevState)
     {    
         LOG("\tNFC Tag Found\n\n");
+
+        if (g_doBeep)
+            do_beep(2000);
+
         PRINT_JSON("{ \"counter\" : %d, ", g_msgCounter++);
         memcpy(&g_TagInfo, pTagInfo, sizeof(nfc_tag_info_t));
         g_DevState = eDevState_PRESENT;
@@ -2197,6 +2234,9 @@ int main(int argc, char ** argv)
             return ~0;
         }
     }
+
+    if(0x00 == LookForTag(argv, argc, "-b", NULL, 0x00) || 0x00 == LookForTag(argv, argc, "--beep", NULL, 0x00))
+        g_doBeep = 1;
 
     if (argc<2)
     {
