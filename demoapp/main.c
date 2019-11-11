@@ -67,18 +67,20 @@ typedef enum T4T_NDEF_EMU_state_t
 } T4T_NDEF_EMU_state_t;
 
 #define LOG(...) fprintf(stderr, __VA_ARGS__)
-#define PRINT_TXT(...) if (g_OutputFormat == eOutputFormat_TXT) printf(__VA_ARGS__)
-#define PRINT_JSON(...) if (g_OutputFormat == eOutputFormat_JSON) printf(__VA_ARGS__)
+#define PRINT_TXT(...) do { if (g_OutputFormat == eOutputFormat_TXT) fprintf(stdout, __VA_ARGS__); } while (0)
+#define PRINT_JSON(...) do { if (g_OutputFormat == eOutputFormat_JSON) fprintf((g_OutputFile ? g_OutputFile : stdout), __VA_ARGS__); } while(0)
 
 static void* g_ThreadHandle = NULL;
 static void* g_devLock = NULL;
 static void* g_SnepClientLock = NULL;
 static void* g_HCELock = NULL;
 static eOutputFormat g_OutputFormat = eOutputFormat_TXT;
+FILE *g_OutputFile = NULL;
 static eDevState g_DevState = eDevState_NONE;
 static eDevType g_Dev_Type = eDevType_NONE;
 static eSnepClientState g_SnepClientState = eSnepClientState_OFF;
 static eHCEState g_HCEState = eHCEState_NONE;
+int g_msgCounter = 0;
 static nfc_tag_info_t g_TagInfo;
 static nfcTagCallback_t g_TagCB;
 static nfcHostCardEmulationCallback_t g_HceCB;
@@ -300,7 +302,7 @@ void onTagArrival(nfc_tag_info_t *pTagInfo)
     if(eDevState_WAIT_ARRIVAL == g_DevState)
     {    
         LOG("\tNFC Tag Found\n\n");
-        PRINT_JSON("{ ");
+        PRINT_JSON("{ \"counter\" : %d, ", g_msgCounter++);
         memcpy(&g_TagInfo, pTagInfo, sizeof(nfc_tag_info_t));
         g_DevState = eDevState_PRESENT;
         g_Dev_Type = eDevType_TAG;
@@ -335,7 +337,12 @@ void onTagDeparture(void)
     {
         LOG("\tNFC Tag Lost\n\n");
         PRINT_JSON(" }\n");
-        fflush(stdout);
+        fflush((g_OutputFile ? g_OutputFile : stdout));
+
+        // standard output is appended continuously, whereas if output file has
+        // been specified, we rewind it after each message and write new content
+        if (g_OutputFile)
+            fseek(g_OutputFile, 0, SEEK_SET);
 
         g_DevState = eDevState_DEPARTED;
         g_Dev_Type = eDevType_NONE;
@@ -2169,6 +2176,7 @@ int CleanEnv()
 int main(int argc, char ** argv)
 {
     char *outputFormat = NULL;
+    char *outputFile = NULL;
 
     if(0x00 == LookForTag(argv, argc, "-x", &outputFormat, 0x01) || 0x00 == LookForTag(argv, argc, "--format", &outputFormat, 0x01))
     {
@@ -2178,6 +2186,15 @@ int main(int argc, char ** argv)
         } else {
             LOG("Using default output format (TXT)\n");
             g_OutputFormat = eOutputFormat_TXT;
+        }
+    }
+
+    if(0x00 == LookForTag(argv, argc, "-o", &outputFile, 0x01) || 0x00 == LookForTag(argv, argc, "--output", &outputFile, 0x01))
+    {
+        if ((g_OutputFile = fopen(outputFile, "w")) == NULL)
+        {
+            LOG("Failed opening output file");
+            return ~0;
         }
     }
 
@@ -2209,7 +2226,7 @@ int main(int argc, char ** argv)
     LOG("\n");
     
     CleanEnv();
-    
+
     return 0;
 }
  
@@ -2225,6 +2242,7 @@ void help(int mode)
     LOG("Help Options:\n");
     LOG("-h, --help                       Show help options\n");
     LOG("-x, --format                     Format: 'json' or 'txt' (default) \n");
+    LOG("-o, --outfile                    Output file\n");
     LOG("\n");
     
     if(0x01 == mode)

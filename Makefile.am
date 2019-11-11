@@ -323,8 +323,6 @@ libnfc_nci_linux_la_SOURCES = \
 	$(HALIMPL_SOURCE) \
 	$(SERVICE_SOURCE)
 
-
-includedir = ${prefix}/usr/include
 include_HEADERS = src/include/linux_nfc_api.h src/include/linux_nfc_factory_api.h
 
 INCLUDE_PARAMS :=$(LIBNFC_NCI_INCLUDE:%=-I$(srcdir)/%)
