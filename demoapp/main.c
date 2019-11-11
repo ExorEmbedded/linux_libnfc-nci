@@ -339,7 +339,7 @@ void onTagArrival(nfc_tag_info_t *pTagInfo)
         if (g_doBeep)
             do_beep(2000);
 
-        PRINT_JSON("{ \"counter\" : %d, ", g_msgCounter++);
+        PRINT_JSON("{ \"counter\" : %d", g_msgCounter++);
         memcpy(&g_TagInfo, pTagInfo, sizeof(nfc_tag_info_t));
         g_DevState = eDevState_PRESENT;
         g_Dev_Type = eDevType_TAG;
@@ -796,12 +796,12 @@ void PrintfNDEFInfo(ndef_info_t pNDEFinfo)
         if(0x01 == pNDEFinfo.is_writable)
         {
            PRINT_TXT("\t\t\t\tReadOnly :                      'FALSE'\n");
-           PRINT_JSON("\"read_only\" : false, ");
+           PRINT_JSON(", \"read_only\" : false");
         }
         else
         {
            PRINT_TXT("\t\t\t\tReadOnly :                         'TRUE'\n");
-           PRINT_JSON("\"read_only\" : true, ");
+           PRINT_JSON(", \"read_only\" : true");
         }
     }
     else    
@@ -1194,10 +1194,10 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
             } break;
         }
 
-        PRINT_JSON("\"ndef_max\" : %d, ", NDEFinfo->max_ndef_length);
+        PRINT_JSON(", \"ndef_max\" : %d", NDEFinfo->max_ndef_length);
 
         PRINT_TXT("\n\t\t%d bytes of NDEF data received :\n\t\t", ndefRawLen);
-        PRINT_JSON("\"ndef_sz\" : %d, \"ndef\" : \"", ndefRawLen);
+        PRINT_JSON(", \"ndef_sz\" : %d, \"ndef\" : \"", ndefRawLen);
 
         for(i = 0x00; i < ndefRawLen; i++)
         {
@@ -1352,7 +1352,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
                     {
                         PRINT_TXT("        UID :       \t'");
                     }
-                    PRINT_JSON("\"id_sz\" : %d, \"id\" : \"", TagInfo.uid_length);
+                    PRINT_JSON(", \"id_sz\" : %d, \"id\" : \"", TagInfo.uid_length);
                     
                     for(i = 0x00; i < TagInfo.uid_length; i++)
                     {
@@ -1366,7 +1366,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
                         }
                     }
                     PRINT_TXT("'\n");
-                    PRINT_JSON("\", ");
+                    PRINT_JSON("\"");
                 }
                 res = nfcTag_isNdef(TagInfo.handle, &NDEFinfo);
                 if(0x01 == res)
