@@ -66,10 +66,6 @@ typedef enum T4T_NDEF_EMU_state_t
     NDEF_Selected
 } T4T_NDEF_EMU_state_t;
 
-#define LOG(...) fprintf(stderr, __VA_ARGS__)
-#define PRINT_TXT(...) do { if (g_OutputFormat == eOutputFormat_TXT) fprintf(stdout, __VA_ARGS__); } while (0)
-#define PRINT_JSON(...) do { if (g_OutputFormat == eOutputFormat_JSON) fprintf((g_OutputFile ? g_OutputFile : stdout), __VA_ARGS__); } while(0)
-
 static void* g_ThreadHandle = NULL;
 static void* g_devLock = NULL;
 static void* g_SnepClientLock = NULL;
@@ -105,6 +101,24 @@ int LookForTag(char** args, int args_len, char* tag, char** data, int format);
 //
 // <extensions>
 //
+
+#define STR_MAX 128
+#define JSON_MAX 2048
+
+#define LOG(...) fprintf(stderr, __VA_ARGS__)
+#define PRINT_TXT(...) do { if (g_OutputFormat == eOutputFormat_TXT) fprintf(stdout, __VA_ARGS__); } while (0)
+//#define PRINT_JSON(...) do { if (g_OutputFormat == eOutputFormat_JSON) fprintf((g_OutputFile ? g_OutputFile : stdout), __VA_ARGS__); } while(0)
+#define PRINT_JSON(...) do { \
+    if (g_OutputFormat == eOutputFormat_JSON) { \
+        if (g_OutputFile) { \
+                char buf[STR_MAX]; \
+                snprintf(buf, sizeof(buf), __VA_ARGS__); \
+                strncat(g_jsonBuf, buf, sizeof(buf)); \
+        } else \
+                fprintf(stderr, __VA_ARGS__); \
+    } \
+} while(0)
+
 #ifndef CLOCK_TICK_RATE
 #define CLOCK_TICK_RATE 1193180
 #endif
@@ -113,6 +127,7 @@ int LookForTag(char** args, int args_len, char* tag, char** data, int format);
 #include <linux/input.h>
 static eOutputFormat g_OutputFormat = eOutputFormat_TXT;
 FILE *g_OutputFile = NULL;
+char g_jsonBuf[JSON_MAX];
 int g_msgCounter = 0;
 int g_doBeep = 0;
 
@@ -336,10 +351,6 @@ void onTagArrival(nfc_tag_info_t *pTagInfo)
     {    
         LOG("\tNFC Tag Found\n\n");
 
-        if (g_doBeep)
-            do_beep(2000);
-
-        PRINT_JSON("{ \"counter\" : %d", g_msgCounter++);
         memcpy(&g_TagInfo, pTagInfo, sizeof(nfc_tag_info_t));
         g_DevState = eDevState_PRESENT;
         g_Dev_Type = eDevType_TAG;
@@ -373,14 +384,6 @@ void onTagDeparture(void)
     if(eDevState_WAIT_DEPARTURE == g_DevState)
     {
         LOG("\tNFC Tag Lost\n\n");
-        PRINT_JSON(" }\n");
-        fflush((g_OutputFile ? g_OutputFile : stdout));
-
-        // standard output is appended continuously, whereas if output file has
-        // been specified, we rewind it after each message and write new content
-        if (g_OutputFile)
-            fseek(g_OutputFile, 0, SEEK_SET);
-
         g_DevState = eDevState_DEPARTED;
         g_Dev_Type = eDevType_NONE;
         framework_NotifyMutex(g_devLock, 0);
@@ -1276,6 +1279,8 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
         
         if(eDevState_PRESENT == g_DevState)
         {
+            PRINT_JSON("{ \"counter\" : %d", g_msgCounter++);
+
             DevTypeBck = g_Dev_Type;
             if(eDevType_TAG == g_Dev_Type)
             {
@@ -1459,7 +1464,25 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
                     {
                         PRINT_TXT("\n\tNot a MIFARE card\n");
                     }
+
                 }
+
+                PRINT_JSON(" }\n");
+
+                if (g_OutputFile) {
+                    fprintf(g_OutputFile, "%s", g_jsonBuf);
+                    ftruncate(fileno(g_OutputFile), strlen(g_jsonBuf));
+                    fseek(g_OutputFile, 0, SEEK_SET);
+                    g_jsonBuf[0] = '\0';
+                }
+
+                // standard output is appended continuously, whereas if output file has
+                // been specified, we rewind it after each message and write new content
+                fflush((g_OutputFile ? g_OutputFile : stdout));
+
+                if (g_doBeep)
+                    do_beep(2000);
+
                 if(0x03 == mode)
                 {
                     res = WriteTag(TagInfo, msgToSend, len);
@@ -2233,6 +2256,7 @@ int main(int argc, char ** argv)
             LOG("Failed opening output file");
             return ~0;
         }
+        memset(g_jsonBuf, 0, sizeof(g_jsonBuf));
     }
 
     if(0x00 == LookForTag(argv, argc, "-b", NULL, 0x00) || 0x00 == LookForTag(argv, argc, "--beep", NULL, 0x00))
