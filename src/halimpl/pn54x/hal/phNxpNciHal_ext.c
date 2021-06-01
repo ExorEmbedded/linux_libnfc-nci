@@ -416,6 +416,7 @@ NFCSTATUS phNxpNciHal_process_ext_rsp (uint8_t *p_ntf, uint16_t *p_len)
     else if(p_ntf[0] == 0x60 && p_ntf[1] == 0x00)
     {
         NXPLOG_NCIHAL_E("CORE_RESET_NTF received!");
+        fprintf(stderr, "CORE_RESET_NTF received!\n");
         phNxpNciHal_emergency_recovery();
     }
     else if(p_ntf[0] == 0x61 && p_ntf[1] == 0x05
