@@ -516,8 +516,21 @@ void phNxpNciHal_print_packet(const char *pString, const uint8_t *p_data,
 **
 *******************************************************************************/
 
+#define NFC_RECOVERY_FILE   "/tmp/nfc-recovery"
 void phNxpNciHal_emergency_recovery(void)
 {
-    NXPLOG_NCIHAL_E("%s: abort()", __FUNCTION__);
+    // NXPLOG_NCIHAL_E("%s: abort()", __FUNCTION__);
     //    abort();
+
+    FILE *fp;
+
+    fprintf(stderr, "%s: creating recovery file\n", __FUNCTION__);
+
+    fp = fopen(NFC_RECOVERY_FILE, "w");
+    if (fp == NULL) {
+        fprintf(stderr, "Failed creating recovery file: %s\n", strerror(errno));
+	return;
+    }
+
+    fclose(fp);
 }
